@@ -50,10 +50,10 @@ try:
             pass
 
         # --- CLEAN 16-BIT CONVERSION MATH ---
-        left_speed = -(left_stick_y / 32767.0)
-        right_speed = -(right_stick_y / 32767.0)
+        left_speed = (32767 - left_stick_y) / 32767.0
+        right_speed = (32767 - right_stick_y) / 32767.0
 
-        # Deadzone filter
+        # Deadzone filter (stops motor creep if the center rests at 32760 instead of 32767)
         if abs(left_speed) < 0.15:
             left_speed = 0.0
         if abs(right_speed) < 0.15:
