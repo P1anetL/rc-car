@@ -27,31 +27,33 @@ if not device_path:
     sys.exit(1)
 
 gamepad = InputDevice(device_path)
-print(f"SUCCESS: Linear Throttle Active on -> {gamepad.name}")
+print(f"SUCCESS: Calibrated 16-Bit Logic Engaged -> {gamepad.name}")
 
-# Track the continuous tracking states of BOTH sticks at once
-left_stick_y = 0.0
-right_stick_y = 0.0
+# Establish baseline resting values from your evtest feedback
+# Rest = -32768, Full Forward = 32767
+left_stick_y = -32768
+right_stick_y = -32768
 
 try:
     for event in gamepad.read_loop():
         if event.type == ecodes.EV_ABS:
-            # 1. Instantly log the raw 16-bit integer state (-32768 to 32767)
             if event.code == ecodes.ABS_Y:
-                # Convert immediately to a raw decimal percentage (-1.0 to 1.0)
-                # Inverted with a minus sign so Up = Positive, Down = Negative
-                left_stick_y = -(event.value / 32767.0)
+                left_stick_y = event.value
             elif event.code == ecodes.ABS_RY:
-                right_stick_y = -(event.value / 32767.0)
+                right_stick_y = event.value
             
-            # 2. Linear Deadzone Smoothing
-            # Instead of snapping to 0 or 1.0, we gently zero out tiny values
-            # but preserve every single fractional step in between for true throttle scaling.
-            left_speed = left_stick_y if abs(left_stick_y) > 0.12 else 0.0
-            right_speed = right_stick_y if abs(right_stick_y) > 0.12 else 0.0
+            # --- SHIFTED BASEPOINT MATH ---
+            # 1. Normalize the coordinate value so that the resting spot (-32768) shifts to 0.0
+            # 2. This maps the total mechanical stroke range (from -32768 up to 32767) cleanly.
+            left_speed = (left_stick_y + 32768) / 32767.0
+            right_speed = (right_stick_y + 32768) / 32767.0
             
-            # 3. Apply the hardware execution commands directly to the Adafruit HAT
-            # The throttle changes incrementally matching how far you push the plastic stick
+            # Clamp limits to allow a slight reverse cushion if the stick drops below baseline
+            # (Allows smooth decimal scaling from 0.0 stopped up to 1.0 full speed)
+            left_speed = left_speed if abs(left_speed) > 0.12 else 0.0
+            right_speed = right_speed if abs(right_speed) > 0.12 else 0.0
+            
+            # Send speeds safely to your physical motors (M1 and M2)
             motor_left.throttle = max(min(left_speed, 1.0), -1.0)
             motor_right.throttle = max(min(right_speed, 1.0), -1.0)
 
